@@ -30,6 +30,8 @@
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/EDAnalyzer.h"
 
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -97,22 +99,30 @@
 #include "DataFormats/EgammaReco/interface/BasicClusterFwd.h"
 #include "DataFormats/EgammaReco/interface/SuperCluster.h"
 #include "DataFormats/EgammaReco/interface/SuperClusterFwd.h"
-#include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
 #include "RecoEcal/EgammaCoreTools/interface/EcalClusterTools.h"
 #include "DataFormats/EgammaReco/interface/BasicClusterShapeAssociation.h"
-
-
+#include "DataFormats/Common/interface/SortedCollection.h"
+// Rechits Collection
+#include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
+#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
+#include "DataFormats/HcalDetId/interface/HcalDetId.h"
 // Get some C/Root Goodies
 #include <string>
 #include <vector>
+#include <iostream>
+#include <map>
+#include <vector>
 #include <algorithm>
-#include <assert>
+#include <functional>
+#include <set>
+#include <assert.h>
+
 #include <TMath.h>
 #include <Math/VectorUtil.h>
+#include <boost/tokenizer.hpp>
 
 #include "TProfile.h"
 #include "TProfile2D.h"
-
 #include "TGraphErrors.h"
 #include "TGraph.h"
 #include "TH1F.h"
@@ -134,18 +144,28 @@ class EcalTimingCalibFromSplash : public edm::EDAnalyzer {
       explicit EcalTimingCalibFromSplash(const edm::ParameterSet&);
       ~EcalTimingCalibFromSplash();
 
-
 //
 // member functions
 //
       double SplashTimeCorr(const CaloSubdetectorGeometry *geometry_p, DetId id);
-      double myTheta(const CaloSubdetectorGeometry *geometry_p, DetId id);
+     // double myTheta(const CaloSubdetectorGeometry *geometry_p, DetId id);
+     std::string intToString(int num);
+     // Initialise Historgrams
+     void initEBHists( edm::Service<TFileService>& fileService_);
+     void initEEMHists( edm::Service<TFileService>& fileService_);
+     void initEEPHists( edm::Service<TFileService>& fileService_);
+     
+     void FillRecHitEB( EcalRecHit myhit);
+     void FillRecHitEEM( EcalRecHit myhit);
+     void FillRecHitEEP( EcalRecHit myhit);
+      /*
       // Trigger Selection
       bool L1TriggerSelection( const edm::Event& iEvent, const edm::EventSetup& iSetup ) ;
       void TriggerTagging( edm::Handle<edm::TriggerResults> triggers, const edm::TriggerNames& trgNameList, int RunID, vector<int>& firedTrig ) ;
       bool TriggerSelection( edm::Handle<edm::TriggerResults> triggers, vector<int> firedTrig ) ;
-     // static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-
+      
+     static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
+     */
 
    private:
       virtual void beginJob() override;
@@ -167,9 +187,31 @@ class EcalTimingCalibFromSplash : public edm::EDAnalyzer {
      //edm::ESHandle<CaloGeometry> pGeometryEB ;
      //edm::ESHandle<CaloGeometry> pGeometryEE ;
      const CaloGeometry * theGeometry ;
+     // Recthits used
+     edm::InputTag EBRecHitCollection_;
+     edm::InputTag EERecHitCollection_;
+     edm::InputTag HBHERecHitCollection_;
+     // Get By Token
+     edm::EDGetTokenT<EcalRecHitCollection> ebEcalRecHitToken_;
+     edm::EDGetTokenT<EcalRecHitCollection> eeEcalRecHitToken_;
+     edm::EDGetTokenT<HBHERecHitCollection> hbheToken_;
 
-     bool L1TrigEvent;
-     bool HLTTrigEvent;
+     edm::InputTag UncalibEBRecHitCollection_;
+     edm::InputTag UncalibEERecHitCollection_;
+     // If Getting EcalRawDataCollection 
+     std::string digiProducer_; // name of module/plugin/producer making digis
+     
+     double minEtCutEB_;
+     double minEtCutEE_;
+     double HBEtCut_;
+     int runNumber_;
+     bool IsSplash_;
+     double EnergyCutTot_;
+     double EnergyCutEcal_;
+     double EnergyCutHcal_;
+
+     bool L1TrigEvent_;
+     bool HLTTrigEvent_;
      int runID_;
      std::vector<int> firedTrig ;
      int targetTrig ;
@@ -178,22 +220,47 @@ class EcalTimingCalibFromSplash : public edm::EDAnalyzer {
      int LumiSection;
      int Orbit;
      int EventRunId;
-     float EventTime;
-
-   
+     edm::Timestamp EventTime;
+     // EB Histograms
+      TH1F* calibHistEB_;
+      TH1F* hitsPerCryHistEB_;
+      TH2F* hitsPerCryMapEB_;
+      TH1F* sigmaHistEB_;
+      TH2F* calibMapEB_;
+      TH2F* sigmaMapEB_;
+      TProfile2D* calibTTMapEB_;
+      TProfile2D* ampProfileMapEB_;
+      TProfile* ampProfileEB_;
+      TH1F* cryTimingHistsEB_[61200];
+      TH1F* superModuleTimingHistsEB_[36];
+      TH1F* triggerTowerTimingHistsEB_[2488];
      
+     // EEM   
+     TH1F* calibHistEEM_;
+     TH2F* hitsPerCryMapEEM_;
+     TH1F* hitsPerCryHistEEM_;
+     TProfile* ampProfileEEM_;
+     TProfile2D* ampProfileMapEEM_;  
+     TH2F* calibMapEEM_;
+     TH2F* sigmaMapEEM_;
+     TH1F* cryTimingHistsEEM_[100][100]; // [0][0] = ix 1, iy 1
+     TH1F* superModuleTimingHistsEEM_[9];
+  
+     //EEP
+     TH1F* calibHistEEP_;
+     TH2F* hitsPerCryMapEEP_;
+     TH1F* hitsPerCryHistEEP_;
+     TProfile* ampProfileEEP_;
+     TProfile2D* ampProfileMapEEP_;
+     TH2F* calibMapEEP_;
+     TH2F* sigmaMapEEP_;
+     TH1F* cryTimingHistsEEP_[100][100]; // [0][0] = ix 1, iy 1
+     TH1F* superModuleTimingHistsEEP_[9];
+
+
+
      std::string rootfile_;
-     std::string hitCollection_;
-     std::string hitCollectionEE_;
-     std::string hitProducer_;
-     std::string hitProducerEE_;
-     std::string rhitCollection_;
-     std::string rhitCollectionEE_;
-     std::string rhitProducer_;
-     std::string rhitProducerEE_;
-     std::string digiProducer_;
-     std::string gtRecordCollectionTag_;
-     float ampl_thr_;
+     float ampl_thrEB_;
      float ampl_thrEE_;
      double mintime_;
      double maxtime_;
@@ -210,78 +277,72 @@ class EcalTimingCalibFromSplash : public edm::EDAnalyzer {
      TProfile* absoluteTimingConv_[54][4];
 
      TProfile* amplProfileAll_[54][4];
-      TProfile* absoluteTimingAll_[54][4];
+     TProfile* absoluteTimingAll_[54][4];
       
-      TProfile* Chi2ProfileConv_[54][4];
-      TH1F* timeCry[54][4];
+     TProfile* Chi2ProfileConv_[54][4];
+     TH1F* timeCry[54][4];
       
-      TProfile* relativeTimingBlueConv_[54];
+     TProfile* relativeTimingBlueConv_[54];
 
-      TGraphErrors* ttTiming_[54];
-      TGraphErrors* ttTimingAll_;
-      TGraphErrors* ttTimingRel_[54];
-      TGraphErrors* ttTimingAllRel_;
-      TGraphErrors* ttTimingAllSMChng_;
+     TGraphErrors* ttTiming_[54];
+     TGraphErrors* ttTimingAll_;
+     TGraphErrors* ttTimingRel_[54];
+     TGraphErrors* ttTimingAllRel_;
+     TGraphErrors* ttTimingAllSMChng_;
       
-      TGraph* lasershiftVsTime_[54];
-      TH2F* lasershiftVsTimehist_[54];
-      TH1F* lasershiftLM_[54];
-      TH1F* lasershift_;
+     TGraph* lasershiftVsTime_[54];
+     TH2F* lasershiftVsTimehist_[54];
+     TH1F* lasershiftLM_[54];
+     TH1F* lasershift_;
       
-      TProfile2D* ttTimingEtaPhi_;
-      TProfile2D* chTimingEtaPhi_;
+     TProfile2D* ttTimingEtaPhi_;
+     TProfile2D* chTimingEtaPhi_;
 	    
-      TProfile* ttTimingEta_;
-      TProfile* chTimingEta_;
+     TProfile* ttTimingEta_;
+     TProfile* chTimingEta_;
 	  
-      TProfile* ttTimingEtaEEP_;
+     TProfile* ttTimingEtaEEP_;
 	  
-      TProfile* ttTimingEtaEEM_;
+     TProfile* ttTimingEtaEEM_;
+     TProfile2D* chTimingEtaPhiEEP_;
+     TProfile2D* chTimingEtaPhiEEM_;
+     TProfile2D* ttTimingEtaPhiEEP_;
+     TProfile2D* ttTimingEtaPhiEEM_;
+     TH1F* timeCry1[54]; 
+     TH1F* timeCry2[54]; 
+     TH1F* timeRelCry1[54]; 
+     TH1F* timeRelCry2[54]; 
+     TH1F* aveRelXtalTime_;
+     TH1F* aveRelXtalTimebyDCC_[54];
+     TH2F* aveRelXtalTimeVsAbsTime_;
+      
+     TProfile2D* fullAmpProfileEB_;
+     TProfile2D* fullAmpProfileEEP_;
+     TProfile2D* fullAmpProfileEEM_;
+      
+     double timerunstart_;
+     double timerunlength_;
 	  
-      TProfile2D* chTimingEtaPhiEEP_;
-      TProfile2D* chTimingEtaPhiEEM_;
-      
-      TProfile2D* ttTimingEtaPhiEEP_;
-      TProfile2D* ttTimingEtaPhiEEM_;
-      
-      TH1F* timeCry1[54]; 
-      TH1F* timeCry2[54]; 
-      TH1F* timeRelCry1[54]; 
-      TH1F* timeRelCry2[54]; 
-      
-      TH1F* aveRelXtalTime_;
-      TH1F* aveRelXtalTimebyDCC_[54];
-      TH2F* aveRelXtalTimeVsAbsTime_;
-      
-      TProfile2D* fullAmpProfileEB_;
-      TProfile2D* fullAmpProfileEEP_;
-      TProfile2D* fullAmpProfileEEM_;
-      
-      double timerunstart_;
-      double timerunlength_;
-	  
-      TH1F* lasersPerEvt;
+     TH1F* lasersPerEvt;
 
-      const EcalElectronicsMapping* ecalElectronicsMap_;
+     const EcalElectronicsMapping* ecalElectronicsMap_;
  
-      int ievt_;
-      int numGoodEvtsPerSM_[54];
-	  
-      static const int numXtals = 15480;
-  
+     int ievt_;
+     int numGoodEvtsPerSM_[54];
+     static const int numXtals = 15480;
       //Allows for running the job on a file
-      bool fromfile_;
-      std::string fromfilename_;   
-	  
-	  //Correct for Timing 
-      bool corrtimeEcal;
-      bool corrtimeBH;
-      bool bhplus_;
-      double EBradius_;
-      bool splash09cor_;
-      TTree* eventTimingInfoTree_;
-	  
-      struct TTreeMembers {
+     bool fromfile_;
+     std::string fromfilename_;   
+     //Correct for Timing 
+     bool corrtimeEcal;
+     bool corrtimeBH;
+     bool bhplus_;
+     double EBradius_;
+     
+     TTree* eventTimingInfoTree_;
+    
+     
+     struct TTreeMembers {
 	    int numEBcrys_;
 	    int numEEcrys_;
 	    int cryHashesEB_[61200];
@@ -302,10 +363,7 @@ class EcalTimingCalibFromSplash : public edm::EDAnalyzer {
 	    int triggers_[200];
 	    int techtriggers_[200];
 	    float absTime_;
-	    int lumiSection_;
-	    int bx_;
-	    int orbit_;
-	    int run_;
+	    
 	    float correctionToSample5EB_;
 	    float correctionToSample5EEP_;
 	    float correctionToSample5EEM_;
